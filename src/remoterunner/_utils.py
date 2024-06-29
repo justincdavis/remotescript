@@ -4,28 +4,68 @@ import argparse
 import logging
 from pathlib import Path
 
-
 _log = logging.getLogger(__name__)
 
 
 def parse_arguments() -> tuple[dict[str, str], Path, Path, Path]:
     """
     Parse the arguments and validate data.
-    
+
     Returns
     -------
-    tuple[dict[str, str], Path, Path]
+    tuple[dict[str, str], Path, Path, Path]
         A tuple containing the arguments, the input file path, and the output file path.
+
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--script', help='The script to execute on remote machines.', type=str, required=True)
-    parser.add_argument("--config", help="The configuration file to use for the remote machines.", type=str, required=True)
-    parser.add_argument('--output', help='The output file to aggregate the data into.', type=str, default="output.json")
-    parser.add_argument('--datafiles', nargs='+', type="list[str]", help='Any data files needed.')
-    parser.add_argument('--deps', type=str, help='Required dependencies in the form of a requirements.txt file.')
-    parser.add_argument('--dep_scripts', nargs='+', type="list[str]", help='Any dependency scripts needed.')
-    parser.add_argument('--time', type=str, default="python", help='Which method of timing overall execution should be used.')
-    parser.add_argument('--remove', nargs='+', type="list[str]", help='Any files which should be removed at the end of execution.')
+    parser.add_argument(
+        "--script",
+        help="The script to execute on remote machines.",
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        "--config",
+        help="The configuration file to use for the remote machines.",
+        type=str,
+        required=True,
+    )
+    parser.add_argument(
+        "--output",
+        help="The output file to aggregate the data into.",
+        type=str,
+        default="output.json",
+    )
+    parser.add_argument(
+        "--datafiles",
+        nargs="+",
+        type="list[str]",
+        help="Any data files needed.",
+    )
+    parser.add_argument(
+        "--deps",
+        type=str,
+        help="Required dependencies in the form of a requirements.txt file.",
+    )
+    parser.add_argument(
+        "--dep_scripts",
+        nargs="+",
+        type="list[str]",
+        help="Any dependency scripts needed.",
+    )
+    parser.add_argument(
+        "--time",
+        type=str,
+        default="python",
+        choices=["python", "linux"],
+        help="Which method of timing overall execution should be used.",
+    )
+    parser.add_argument(
+        "--remove",
+        nargs="+",
+        type="list[str]",
+        help="Any files which should be removed at the end of execution.",
+    )
 
     args = parser.parse_args()
     input_file_str: str = args.script
@@ -43,12 +83,12 @@ def parse_arguments() -> tuple[dict[str, str], Path, Path, Path]:
     if input_file.suffix != ".py":
         err_msg = f"Input file must be a Python script: {input_file}"
         raise ValueError(err_msg)
-    
+
     config_file = Path(config_file_str)
     if not config_file.exists():
         err_msg = f"Config file does not exist: {config_file}"
         raise FileNotFoundError(err_msg)
-    
+
     output_file = Path(output_file_str)
     if output_file.exists():
         err_msg = f"Output file already exists: {output_file}"
@@ -78,11 +118,11 @@ def parse_arguments() -> tuple[dict[str, str], Path, Path, Path]:
         if dep_script_path.suffix != ".py":
             err_msg = f"Dependency script must be a Python script: {dep_script_path}"
             raise ValueError(err_msg)
-    
+
     valid_time_methods = ["python", "linux"]
     if time_method not in valid_time_methods:
         err_msg = f"Invalid time method: {time_method},"
         err_msg += f" valid methods are: {valid_time_methods}"
         raise ValueError(err_msg)
 
-    return 
+    return
