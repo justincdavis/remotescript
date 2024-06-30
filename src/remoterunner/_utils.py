@@ -1,3 +1,6 @@
+# Copyright (c) 2024 Justin Davis (davisjustin302@gmail.com)
+#
+# MIT License
 from __future__ import annotations
 
 import argparse
@@ -7,14 +10,16 @@ from pathlib import Path
 _log = logging.getLogger(__name__)
 
 
-def parse_arguments() -> tuple[dict[str, str], Path, Path, Path]:
+def parse_arguments() -> (
+    tuple[Path, Path, Path, list[str], str | None, list[str], str, list[str]]
+):
     """
     Parse the arguments and validate data.
 
     Returns
     -------
-    tuple[dict[str, str], Path, Path, Path]
-        A tuple containing the arguments, the input file path, and the output file path.
+    tuple[Path, Path, Path, list[str], str | None, list[str], str, list[str]]
+        The parsed and validated arguments.
 
     """
     parser = argparse.ArgumentParser()
@@ -75,6 +80,7 @@ def parse_arguments() -> tuple[dict[str, str], Path, Path, Path]:
     requirements_file: str | None = args.deps
     deps_scripts: list[str] = args.dep_scripts or []
     time_method: str = args.time
+    remove_files: list[str] = args.remove or []
 
     input_file = Path(input_file_str)
     if not input_file.exists():
@@ -125,4 +131,13 @@ def parse_arguments() -> tuple[dict[str, str], Path, Path, Path]:
         err_msg += f" valid methods are: {valid_time_methods}"
         raise ValueError(err_msg)
 
-    return
+    return (
+        input_file,
+        config_file,
+        output_file,
+        datafiles,
+        requirements_file,
+        deps_scripts,
+        time_method,
+        remove_files,
+    )
