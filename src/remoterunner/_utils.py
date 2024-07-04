@@ -4,22 +4,36 @@
 from __future__ import annotations
 
 import argparse
+import configparser
+import json
 import logging
+import time
+import re
 from pathlib import Path
+
+from stdlib_list import stdlib_list
 
 _log = logging.getLogger(__name__)
 
 
 def parse_arguments() -> (
-    tuple[Path, Path, Path, list[str], str | None, list[str], str, list[str]]
+    tuple[Path, Path, Path, list[Path], Path | None, list[Path], int]
 ):
     """
     Parse the arguments and validate data.
 
     Returns
     -------
-    tuple[Path, Path, Path, list[str], str | None, list[str], str, list[str]]
+    tuple[Path, Path, Path, list[Path], Path | None, list[Path], int]
         The parsed and validated arguments.
+
+    Raises
+    ------
+    FileNotFoundError
+        If any of the files do not exist.
+    ValueError
+        If any of the files are not of the correct type.
+        If the time method is not valid.
 
     """
     parser = argparse.ArgumentParser()
@@ -37,14 +51,12 @@ def parse_arguments() -> (
     )
     parser.add_argument(
         "--output",
-        help="The output file to aggregate the data into.",
+        help="The output directory to aggregate the data into.",
         type=str,
-        default="output.json",
     )
     parser.add_argument(
         "--datafiles",
         nargs="+",
-        type="list[str]",
         help="Any data files needed.",
     )
     parser.add_argument(
@@ -55,32 +67,23 @@ def parse_arguments() -> (
     parser.add_argument(
         "--dep_scripts",
         nargs="+",
-        type="list[str]",
         help="Any dependency scripts needed.",
     )
     parser.add_argument(
-        "--time",
-        type=str,
-        default="python",
-        choices=["python", "linux"],
-        help="Which method of timing overall execution should be used.",
-    )
-    parser.add_argument(
-        "--remove",
-        nargs="+",
-        type="list[str]",
-        help="Any files which should be removed at the end of execution.",
+        "--timeout",
+        type=int,
+        default=5,
+        help="The timeout for the connection to the remote machine.",
     )
 
     args = parser.parse_args()
     input_file_str: str = args.script
     config_file_str: str = args.config
-    output_file_str: str = args.output
+    output_dir_str: str = args.output or f"output_{int(time.time())}"
     datafiles: list[str] = args.datafiles or []
     requirements_file: str | None = args.deps
     deps_scripts: list[str] = args.dep_scripts or []
-    time_method: str = args.time
-    remove_files: list[str] = args.remove or []
+    timeout: int = args.timeout
 
     input_file = Path(input_file_str)
     if not input_file.exists():
@@ -95,18 +98,24 @@ def parse_arguments() -> (
         err_msg = f"Config file does not exist: {config_file}"
         raise FileNotFoundError(err_msg)
 
-    output_file = Path(output_file_str)
-    if output_file.exists():
-        err_msg = f"Output file already exists: {output_file}"
-        err_msg += "\nFile contents will be overwritten."
+    output_dir = Path(output_dir_str)
+    if output_dir.exists():
+        if output_dir.is_file():
+            err_msg = f"Output directory is a file: {output_dir}"
+            raise ValueError(err_msg)
+        err_msg = f"Output directory already exists: {output_dir}"
+        err_msg += " file contents will be overwritten."
         _log.warning(err_msg)
 
+    datafile_paths: list[Path] = []
     for datafile in datafiles:
         datafile_path = Path(datafile)
         if not datafile_path.exists():
             err_msg = f"Data file does not exist: {datafile_path}"
             raise FileNotFoundError(err_msg)
+        datafile_paths.append(datafile_path)
 
+    requirements_retval: Path | None = None
     if requirements_file is not None:
         requirements_path = Path(requirements_file)
         if not requirements_path.exists():
@@ -115,7 +124,9 @@ def parse_arguments() -> (
         if requirements_path.suffix != ".txt":
             err_msg = f"Requirements file must be a text file: {requirements_path}"
             raise ValueError(err_msg)
+        requirements_retval = requirements_path
 
+    dep_script_paths: list[Path] = []
     for dep_script in deps_scripts:
         dep_script_path = Path(dep_script)
         if not dep_script_path.exists():
@@ -124,20 +135,107 @@ def parse_arguments() -> (
         if dep_script_path.suffix != ".py":
             err_msg = f"Dependency script must be a Python script: {dep_script_path}"
             raise ValueError(err_msg)
-
-    valid_time_methods = ["python", "linux"]
-    if time_method not in valid_time_methods:
-        err_msg = f"Invalid time method: {time_method},"
-        err_msg += f" valid methods are: {valid_time_methods}"
-        raise ValueError(err_msg)
+        dep_script_paths.append(dep_script_path)
 
     return (
         input_file,
         config_file,
-        output_file,
-        datafiles,
-        requirements_file,
-        deps_scripts,
-        time_method,
-        remove_files,
+        output_dir,
+        datafile_paths,
+        requirements_retval,
+        dep_script_paths,
+        timeout,
     )
+
+
+def _parse_json_config(
+    config_path: Path,
+) -> list[tuple[str, str | None, str | None, str | None, int | None]]:
+    config_list = []
+    with open(config_path) as f:
+        config: dict[str, dict[str, dict[str, str]]] = json.load(f)
+        machines_config: dict[str, dict[str, str]] = config["machines"]
+    for machine_name, machine_data in machines_config.items():
+        host = machine_data.get("hostname")
+        user = machine_data.get("username")
+        password = machine_data.get("password")
+        try:
+            port = int(machine_data.get("port")) if machine_data.get("port") else None
+        except ValueError as err:
+            err_msg = f"Invalid port number for machine: {machine_name}"
+            raise ValueError(err_msg) from err
+        config_list.append((machine_name, host, user, password, port))
+    return config_list
+
+
+def _parse_cfg_config(
+    config_path: Path,
+) -> list[tuple[str, str | None, str | None, str | None, int | None]]:
+    config_list = []
+    config: configparser.ConfigParser = configparser.ConfigParser()
+    config.read(config_path)
+    for section in config.sections():
+        machine_name = section
+        host = config[section].get("hostname")
+        user = config[section].get("username")
+        password = config[section].get("password")
+        try:
+            port = (
+                int(config[section].get("port"))
+                if config[section].get("port")
+                else None
+            )
+        except ValueError as err:
+            err_msg = f"Invalid port number for machine: {machine_name}"
+            raise ValueError(err_msg) from err
+        config_list.append((machine_name, host, user, password, port))
+    return config_list
+
+
+def parse_config(config_path: Path) -> list[tuple[str, str, str, str, int | None]]:
+    """
+    Parse the configuration file.
+
+    Parameters
+    ----------
+    config_path : Path
+        The path to the configuration file.
+        A configuration file can be either a json or cfg/ini file.
+
+    Returns
+    -------
+    list[tuple[str, str, str, str, int | None]]
+        A list of tuples containing the machine name, host,
+          user, password, and port for each machine.
+
+    Raises
+    ------
+    ValueError
+        If the configuration file is not a json or cfg/ini file.
+
+    """
+    config_list = []
+    if config_path.suffix == ".json":
+        config_list = _parse_json_config(config_path)
+    elif config_path.suffix in [".cfg", ".ini"]:
+        config_list = _parse_cfg_config(config_path)
+    else:
+        err_msg = f"Invalid config file type: {config_path}"
+        raise ValueError(err_msg)
+
+    # perform some validation
+    for machine_name, host, user, password, port in config_list:
+        if host is None:
+            err_msg = f"Missing hostname for machine: {machine_name}"
+            raise ValueError(err_msg)
+        if user is None:
+            err_msg = f"Missing username for machine: {machine_name}"
+            raise ValueError(err_msg)
+        if password is None:
+            err_msg = f"Missing password for machine: {machine_name}"
+            raise ValueError(err_msg)
+        if port is not None and not 0 < port < 65536:
+            err_msg = f"Invalid port number for machine: {machine_name}"
+            raise ValueError(err_msg)
+
+    return config_list

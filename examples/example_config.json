@@ -1,14 +1,13 @@
 {
     "machines": {
         "machine1": {
-            "gateway": "example.com",
+            "hostname": "example.com",
             "port": 22,
             "username": "user1",
             "password": "password1"
         },
         "machine2": {
-            "gateway": "example.com",
-            "port": 22,
+            "hostname": "example.com",
             "username": "user2",
             "password": "password2"
         }

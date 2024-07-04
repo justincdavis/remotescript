@@ -2,9 +2,7 @@
 #
 # MIT License
 # ruff: noqa: E402, F401
-"""
-A package for running scripts on remote machines.
-"""
+"""A package for running scripts on remote machines."""
 
 from __future__ import annotations
 
@@ -79,4 +77,9 @@ if level is not None and level.upper() not in [
 __author__ = "Justin Davis"
 __version__ = "0.0.1"
 
-__all__ = ["set_log_level"]
+from ._core import run_script
+
+__all__ = [
+    "run_script",
+    "set_log_level",
+]
