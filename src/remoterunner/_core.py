@@ -1,13 +1,13 @@
 # Copyright (c) 2024 Justin Davis (davisjustin302@gmail.com)
 #
 # MIT License
-# ruff: noqa: S507, PERF203
+# ruff: noqa: S507
 from __future__ import annotations
 
-import socket
-import logging
-import time
 import json
+import logging
+import socket
+import time
 from typing import TYPE_CHECKING
 
 import paramiko
@@ -61,7 +61,24 @@ def run_script(
         The timeout for the connection.
 
     """
-    _log.debug(f"{machine_name}: Starting run_script")
+    def write_stdout_stderr(stdout: str, stderr: str):
+        """Write the stdout and stderr to files before exit."""
+        _log.debug(f"{machine_name}: Exiting")
+        # write stdout, stderr to files
+        stdout_path = output_dir_path / "stdout.txt"
+        stderr_path = output_dir_path / "stderr.txt"
+        stdout_path.touch(exist_ok=True)
+        stderr_path.touch(exist_ok=True)
+        stdout_path.write_text(stdout)
+        stderr_path.write_text(stderr)
+        _log.debug(f"{machine_name}: Wrote stdout, stderr to files")
+        _log.debug(f"{machine_name}: Starting run_script")
+
+    # begin running logs for stdout and stderr of the script
+    stdout = ""
+    stderr = ""
+
+    # create client and connect
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     try:
@@ -74,17 +91,23 @@ def run_script(
         )
     except socket.timeout:
         _log.error(f"{machine_name}: Connection timed out, exiting.")
+        write_stdout_stderr(stdout, stderr)
         return
-    except socket.error as er:
+    except OSError as er:
         _log.error(f"{machine_name}: Socket error: {er}")
+        write_stdout_stderr(stdout, stderr)
         return
     _log.debug(f"{machine_name}: Connected")
 
+    # check for python3
     try:
-        client.exec_command("python3 --version")
+        _, py3_stdout, py3_stderr = client.exec_command("python3 --version")
         _log.debug(f"{machine_name}: Python3 found")
+        stdout += py3_stdout.read().decode()
+        stderr += py3_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Python3 not found, exiting.")
+        write_stdout_stderr(stdout, stderr)
         return
 
     # create new directory for which to run the script and create
@@ -93,10 +116,15 @@ def run_script(
     run_directory = f"run_{int(time.time())}"
     machine_directory = f"{base_directory}/{run_directory}"
     try:
-        client.exec_command(f"mkdir -p {machine_directory}")
-        _log.debug(f"{machine_name}: Created directory for execution, {machine_directory}")
+        _, mk_stdoutt, mk_stderr = client.exec_command(f"mkdir -p {machine_directory}")
+        _log.debug(
+            f"{machine_name}: Created directory for execution, {machine_directory}",
+        )
+        stdout += mk_stdoutt.read().decode()
+        stderr += mk_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not create virtualenv directory")
+        write_stdout_stderr(stdout, stderr)
         return
 
     # create the scp_client
@@ -105,70 +133,127 @@ def run_script(
         _log.debug(f"{machine_name}: Created SCPClient")
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not create SCPClient: {err}")
+        write_stdout_stderr(stdout, stderr)
         return
 
     # transfer the files
     try:
         scp_client.put(str(script_path), f"{machine_directory}/script.py")
-        _log.debug(f"{machine_name}: Transferred {script_path} to {machine_directory}/script.py")
+        _log.debug(
+            f"{machine_name}: Transferred {script_path} to {machine_directory}/script.py",
+        )
         if datafiles is not None:
             for datafile in datafiles:
                 scp_client.put(str(datafile), f"{machine_directory}/{datafile.name}")
-                _log.debug(f"{machine_name}: Transferred datafile {datafile} to {machine_directory}/{datafile.name}")
+                _log.debug(
+                    f"{machine_name}: Transferred datafile {datafile} to {machine_directory}/{datafile.name}",
+                )
         if deps is not None:
             scp_client.put(str(deps), f"{machine_directory}/requirements.txt")
             _log.debug(f"{machine_name}: Transferred requirements file")
         if dep_scripts is not None:
             for dep_script in dep_scripts:
-                scp_client.put(str(dep_script), f"{machine_directory}/{dep_script.name}")
-                _log.debug(f"{machine_name}: Transferred dependency script {dep_script}")
+                scp_client.put(
+                    str(dep_script),
+                    f"{machine_directory}/{dep_script.name}",
+                )
+                _log.debug(
+                    f"{machine_name}: Transferred dependency script {dep_script}",
+                )
         _log.debug(f"{machine_name}: Transferred all files")
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not transfer files: {err}")
+        write_stdout_stderr(stdout, stderr)
         return
 
     # ensure virtualenv is installed
     try:
-        client.exec_command("python3 -m pip install virtualenv")
+        _, venv_install_stdout, venv_install_stderr = client.exec_command("python3 -m pip install virtualenv")
+        stdout += venv_install_stdout.read().decode()
+        stderr += venv_install_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install virtualenv")
+        write_stdout_stderr(stdout, stderr)
         return
-    
+
     # create the virtual environment
     try:
-        client.exec_command(f"python3 -m venv {machine_directory}/env")
+        _, venv_create_stdout, venv_create_stderr = client.exec_command(f"python3 -m venv {machine_directory}/env")
+        stdout += venv_create_stdout.read().decode()
+        stderr += venv_create_stderr.read().decode()
+        if venv_create_stderr.read().decode():
+            _log.error(f"{machine_name}: Could not create virtualenv")
+            write_stdout_stderr(stdout, stderr)
+            return
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not create virtualenv")
+        write_stdout_stderr(stdout, stderr)
         return
-    
+
     # install the dependencies
     try:
-        command = f"{machine_directory}/env/bin/activate;"
+        command = f"source {machine_directory}/env/bin/activate;"
         command += f"python3 -m pip install -r {machine_directory}/requirements.txt;"
         command += "deactivate"
-        client.exec_command(command)
+        _, command_stdout, command_stderr = client.exec_command(command)
+        env_stdout_text = command_stdout.read().decode()
+        env_stderr_text = command_stderr.read().decode()
+        stdout += env_stdout_text
+        stderr += env_stderr_text
+
+        # evaluate the output of the virtualenv installation
+        failed = False
+        if not "Successfully installed" in env_stdout_text or "Requirement already satisfied" in env_stdout_text:
+            # _log.error(f"{machine_name}: dep install STDOUT: {env_stdout_text}")
+            failed = True
+        if env_stderr_text:
+            _log.error(f"{machine_name}: Error installing the dependencies, attempting run anyways...")
+            # _log.error(f"{machine_name}: dep install STDERR: {env_stderr_text}")
+            # failed = True
+        if failed:
+            return
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install dependencies")
+        write_stdout_stderr(stdout, stderr)
         return
 
     # run the script
     try:
-        _, start_time_stdout, _ = client.exec_command("python3 -c 'import time; print(int(time.time()))'")
+        # start time
+        # TODO: convert to new stdout/stderr model
+        failed_time = False
+        _, start_time_stdout, st_stderr = client.exec_command(
+            "python3 -c 'import time; print(int(time.time()))'",
+        )
+        if st_stderr.read().decode():
+            failed_time = True
+
+        # actual script run
         command = f"cd {machine_directory};"
-        command += "env/bin/activate;"
+        command += "source env/bin/activate;"
         command += "python3 script.py;"
         command += "deactivate"
         _, stdout, stderr = client.exec_command(command)
-        _, end_time_stdout, _ = client.exec_command("python3 -c 'import time; print(int(time.time()))'")
-    
-        start_time = int(start_time_stdout.read().decode().strip())
-        end_time = int(end_time_stdout.read().decode().strip())
-        total_time = end_time - start_time
+
+        # end time
+        _, end_time_stdout, et_stderr = client.exec_command(
+            "python3 -c 'import time; print(int(time.time()))'",
+        )
+        if et_stderr.read().decode():
+            failed_time = True
+
+        # generate total time or n/a if failed
+        if not failed_time:
+            start_time = int(start_time_stdout.read().decode().strip())
+            end_time = int(end_time_stdout.read().decode().strip())
+            total_time = end_time - start_time
+        else:
+            total_time = "n/a"
         _log.debug(f"{machine_name}: Script ran in {total_time} seconds")
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not run script")
         return
-    
+
     # clean the environment
     try:
         client.exec_command(f"rm -rf {machine_directory}/env")
@@ -179,20 +264,17 @@ def run_script(
 
     # transfer the run directory into the output directory for the machine
     try:
-        scp_client.get(f"{machine_directory}", f"{output_dir_path}/{run_directory}", recursive=True)
+        scp_client.get(
+            f"{machine_directory}",
+            f"{output_dir_path}/{run_directory}",
+            recursive=True,
+        )
         _log.debug(f"{machine_name}: Transferred output directory")
     except scp.SCPException as err:
-        _log.error(f"{machine_name}: Could not transfer output directory back to host: {err}")
+        _log.error(
+            f"{machine_name}: Could not transfer output directory back to host: {err}",
+        )
         return
-    
-    # write stdout, stderr to files
-    stdout_path = output_dir_path / "stdout.txt"
-    stderr_path = output_dir_path / "stderr.txt"
-    stdout_path.touch(exist_ok=True)
-    stderr_path.touch(exist_ok=True)
-    stdout_path.write_text(stdout.read().decode())
-    stderr_path.write_text(stderr.read().decode())
-    _log.debug(f"{machine_name}: Wrote stdout, stderr to files")
 
     # write output.json
     output_json = {

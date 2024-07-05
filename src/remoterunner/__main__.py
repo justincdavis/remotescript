@@ -10,8 +10,12 @@ from threading import Thread
 from typing import TYPE_CHECKING
 
 from ._core import run_script
+from ._imports import (
+    compare_and_prune_libs,
+    generate_requirements,
+    parse_and_trim_imports,
+)
 from ._utils import parse_arguments, parse_config
-from ._imports import parse_and_trim_imports, compare_and_prune_libs, generate_requirements
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -53,7 +57,10 @@ def main() -> None:
 
     # create thread for each machines connection
     threads: list[Thread] = []
-    for (machine_name, hostname, user, password, port), m_output_dir in zip(config, machine_output_dirs):
+    for (machine_name, hostname, user, password, port), m_output_dir in zip(
+        config,
+        machine_output_dirs,
+    ):
         threads.append(
             Thread(
                 target=run_script,

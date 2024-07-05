@@ -3,15 +3,14 @@
 # MIT License
 from __future__ import annotations
 
-import argparse
-import configparser
-import json
 import logging
-import time
 import re
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from stdlib_list import stdlib_list
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _log = logging.getLogger(__name__)
 
@@ -36,6 +35,8 @@ def parse_and_trim_imports(file_path: Path) -> list[tuple[str, str]]:
         A list of import statements.
 
     """
+    _log.debug(f"Parsing imports from {file_path}")
+
     # Read the file and find import statements using regular expressions
     matches: list[list[tuple[str, str]]] = [
         re.findall(
@@ -55,6 +56,8 @@ def parse_and_trim_imports(file_path: Path) -> list[tuple[str, str]]:
     for match in matches:
         unnested.extend(match)
 
+    _log.debug(f"Found {len(unnested)} imports in {file_path}")
+
     return unnested
 
 
@@ -66,17 +69,19 @@ def compare_and_prune_libs(libs: list[tuple[str, str]]) -> list[str]:
     ----------
     libs : list[tuple[str, str]]
         A list of libraries to compare.
-    
+
     Returns
     -------
     list[str]
         A list of libraries with standard libraries removed.
 
     """
+    starting_libs = len(libs)
     stdlibs = stdlib_list()
     valid_libs = []
     for lib in libs:
-        if lib[0] == "":
+        # if lib[0] == "":
+        if not lib[0]:
             if lib[1] not in stdlibs:
                 valid_libs.append(lib)
         else:
@@ -84,10 +89,16 @@ def compare_and_prune_libs(libs: list[tuple[str, str]]) -> list[str]:
                 valid_libs.append(lib)
     cleaned_libs = []
     for vlib in valid_libs:
-        if vlib[0] == "":
+        # if vlib[0] == "":
+        if not vlib[0]:
             cleaned_libs.append(vlib[1])
         else:
             cleaned_libs.append(vlib[0])
+
+    _log.debug(
+        f"Removed {starting_libs - len(cleaned_libs)} standard libraries during cleaning",
+    )
+
     return cleaned_libs
 
 

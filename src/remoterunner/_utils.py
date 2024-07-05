@@ -8,10 +8,7 @@ import configparser
 import json
 import logging
 import time
-import re
 from pathlib import Path
-
-from stdlib_list import stdlib_list
 
 _log = logging.getLogger(__name__)
 
@@ -152,7 +149,7 @@ def _parse_json_config(
     config_path: Path,
 ) -> list[tuple[str, str | None, str | None, str | None, int | None]]:
     config_list = []
-    with open(config_path) as f:
+    with config_path.open(mode="r", encoding="utf-8") as f:
         config: dict[str, dict[str, dict[str, str]]] = json.load(f)
         machines_config: dict[str, dict[str, str]] = config["machines"]
     for machine_name, machine_data in machines_config.items():
@@ -224,6 +221,7 @@ def parse_config(config_path: Path) -> list[tuple[str, str, str, str, int | None
         raise ValueError(err_msg)
 
     # perform some validation
+    max_port = 65535
     for machine_name, host, user, password, port in config_list:
         if host is None:
             err_msg = f"Missing hostname for machine: {machine_name}"
@@ -234,7 +232,7 @@ def parse_config(config_path: Path) -> list[tuple[str, str, str, str, int | None
         if password is None:
             err_msg = f"Missing password for machine: {machine_name}"
             raise ValueError(err_msg)
-        if port is not None and not 0 < port < 65536:
+        if port is not None and not 0 < port < max_port:
             err_msg = f"Invalid port number for machine: {machine_name}"
             raise ValueError(err_msg)
 
