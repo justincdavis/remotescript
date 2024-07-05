@@ -157,7 +157,8 @@ def _parse_json_config(
         user = machine_data.get("username")
         password = machine_data.get("password")
         try:
-            port = int(machine_data.get("port")) if machine_data.get("port") else None
+            md_port = machine_data.get("port")
+            port = int(md_port) if md_port else None
         except ValueError as err:
             err_msg = f"Invalid port number for machine: {machine_name}"
             raise ValueError(err_msg) from err
@@ -236,4 +237,5 @@ def parse_config(config_path: Path) -> list[tuple[str, str, str, str, int | None
             err_msg = f"Invalid port number for machine: {machine_name}"
             raise ValueError(err_msg)
 
-    return config_list
+    # for-loop above verifies that the str items are not None
+    return config_list  # type: ignore[return-value]
