@@ -2,7 +2,19 @@
 #
 # MIT License
 # ruff: noqa: E402, F401
-"""A package for running scripts on remote machines."""
+"""
+A package for running scripts on remote machines.
+
+Functions
+---------
+check_bash
+    Check if bash is installed on the remote machine.
+run_script
+    Run a script on a remote machine.
+set_log_level
+    Set the log level for the remoterunner package.
+
+"""
 
 from __future__ import annotations
 
@@ -77,9 +89,10 @@ if level is not None and level.upper() not in [
 __author__ = "Justin Davis"
 __version__ = "0.0.1"
 
-from ._core import run_script
+from ._core import check_bash, run_script
 
 __all__ = [
+    "check_bash",
     "run_script",
     "set_log_level",
 ]
