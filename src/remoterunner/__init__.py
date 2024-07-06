@@ -89,10 +89,14 @@ if level is not None and level.upper() not in [
 __author__ = "Justin Davis"
 __version__ = "0.0.1"
 
+from . import _core, _imports, _utils
 from ._core import check_bash, run_script
 
 __all__ = [
     "check_bash",
     "run_script",
     "set_log_level",
+    "_core",
+    "_imports",
+    "_utils",
 ]

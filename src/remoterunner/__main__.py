@@ -32,6 +32,7 @@ def main() -> None:
         datafiles,
         deps,
         dep_scripts,
+        dep_dirs,
         timeout,
     ) = parse_arguments()
     config = parse_config(config_path)
@@ -48,6 +49,16 @@ def main() -> None:
 
     # generate requirements file if it does not exist
     if deps is None:
+        if (dep_scripts is not None and len(dep_scripts) > 0) or (
+            dep_dirs is not None and len(dep_dirs) > 0
+        ):
+            wstr = "Dependency scripts/directories provided but no requirements file."
+            wstr += " Requirements.txt will be auto-generated from ONLY primary script."
+            wstr += (
+                " Dependency scripts/directories may not get all required libraries."
+            )
+            _log.warning(wstr)
+        _log.warning("Auto-generating requirements file from provided script.")
         imports: list[tuple[str, str]] = parse_and_trim_imports(script_path)
         valid_imports: list[str] = compare_and_prune_libs(imports)
         deps = output_dir_path / "requirements.txt"
@@ -75,6 +86,7 @@ def main() -> None:
                     deps,
                     datafiles,
                     dep_scripts,
+                    dep_dirs,
                     timeout,
                 ),
                 daemon=True,

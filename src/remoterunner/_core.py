@@ -90,8 +90,11 @@ def run_script(
     deps: Path,
     datafiles: list[Path] | None = None,
     dep_scripts: list[Path] | None = None,
+    dep_dirs: list[Path] | None = None,
     timeout: int = 5,
-) -> None:
+    *,
+    transfer_run_dir: bool | None = None,
+) -> bool:
     """
     Run the script on the remote machine.
 
@@ -117,8 +120,18 @@ def run_script(
         The dependencies to install.
     dep_scripts : list[Path] | None
         The dependency scripts to run.
+    dep_dirs : list[Path] | None
+        The dependency directories to transfer.
     timeout : int
         The timeout for the connection.
+    transfer_run_dir : bool | None
+        Whether to transfer the run directory back to the host.
+        If None, the default is False.
+
+    Returns
+    -------
+    bool
+        True if the script ran successfully, False otherwise.
 
     """
 
@@ -133,7 +146,6 @@ def run_script(
         stdout_path.write_text(stdout)
         stderr_path.write_text(stderr)
         _log.debug(f"{machine_name}: Wrote stdout, stderr to files")
-        _log.debug(f"{machine_name}: Starting run_script")
 
     def write_output_json(output_dir: Path, st: int, et: int, total: int) -> None:
         """Write the output.json file."""
@@ -150,6 +162,13 @@ def run_script(
     def wrap_command(bash: str, command: str) -> str:
         """Wrap the command in the bash command."""
         return f"{bash} -c '{command}'"
+
+    # begin run_script
+    _log.debug(f"{machine_name}: Starting run_script")
+
+    # handle and argument defaults
+    if transfer_run_dir is None:
+        transfer_run_dir = False
 
     # begin running logs for stdout and stderr of the script
     stdout = ""
@@ -169,11 +188,11 @@ def run_script(
     except socket.timeout:
         _log.error(f"{machine_name}: Connection timed out, exiting.")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
     except OSError as er:
         _log.error(f"{machine_name}: Socket error: {er}")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
     _log.debug(f"{machine_name}: Connected")
 
     # check for python3
@@ -185,7 +204,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Python3 not found, exiting.")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # check for bash and create command wrapper
     bash = check_bash(client)
@@ -193,7 +212,7 @@ def run_script(
     if bash is None:
         _log.error(f"{machine_name}: Bash not found, exiting.")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
     _log.debug(f"{machine_name}: Bash found")
 
     # create new directory for which to run the script and create
@@ -212,7 +231,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not create virtualenv directory")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # create the scp_client
     try:
@@ -221,7 +240,7 @@ def run_script(
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not create SCPClient: {err}")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # transfer the files
     try:
@@ -247,14 +266,27 @@ def run_script(
                 _log.debug(
                     f"{machine_name}: Transferred dependency script {dep_script}",
                 )
+        if dep_dirs is not None:
+            for dep_dir in dep_dirs:
+                scp_client.put(
+                    str(dep_dir),
+                    f"{machine_directory}/{dep_dir.name}",
+                    recursive=True,
+                )
+                _log.debug(
+                    f"{machine_name}: Transferred dependency directory {dep_dir}",
+                )
         _log.debug(f"{machine_name}: Transferred all files")
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not transfer files: {err}")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # ensure virtualenv is installed
     try:
+        upip_com = "python3 -m pip install --upgrade pip"
+        # assume the upgrade pip line will be successfull
+        client.exec_command(com_wrap(upip_com))
         venv_install_com = "python3 -m pip install virtualenv"
         _, venv_install_stdout, venv_install_stderr = client.exec_command(
             com_wrap(venv_install_com),
@@ -264,7 +296,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install virtualenv")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # create the virtual environment
     try:
@@ -277,11 +309,11 @@ def run_script(
         if venv_create_stderr.read().decode():
             _log.error(f"{machine_name}: Could not create virtualenv")
             write_stdout_stderr(output_dir_path, stdout, stderr)
-            return
+            return False
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not create virtualenv")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # install the dependencies
     try:
@@ -299,25 +331,21 @@ def run_script(
         stderr += env_stderr_text
 
         # evaluate the output of the virtualenv installation
-        failed = False
-        if (
-            "Successfully installed" not in env_stdout_text
-            or "Requirement already satisfied" in env_stdout_text
-        ):
-            # _log.error(f"{machine_name}: dep install STDOUT: {env_stdout_text}")
-            failed = True
-        if env_stderr_text:
-            _log.error(
-                f"{machine_name}: Error installing the dependencies, attempting run anyways...",
-            )
-            # _log.error(f"{machine_name}: dep install STDERR: {env_stderr_text}")
-            # failed = True
-        if failed:
-            return
+        for line in env_stderr_text.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # stderr contains text that is not upgrade notice
+            if "[notice]" not in line:
+                _log.error(
+                    f"{machine_name}: Error installing the dependencies",
+                )
+                write_stdout_stderr(output_dir_path, stdout, stderr)
+                return False
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install dependencies")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # run the script
     try:
@@ -340,7 +368,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not run script")
         write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+        return False
 
     # clean the environment
     try:
@@ -351,19 +379,23 @@ def run_script(
         _log.warning(f"{machine_name}: Could not clean up environment")
 
     # transfer the run directory into the output directory for the machine
-    try:
-        scp_client.get(
-            f"{machine_directory}",
-            f"{output_dir_path}/{run_directory}",
-            recursive=True,
-        )
-        _log.debug(f"{machine_name}: Transferred output directory")
-    except scp.SCPException as err:
-        _log.error(
-            f"{machine_name}: Could not transfer output directory back to host: {err}",
-        )
-        write_stdout_stderr(output_dir_path, stdout, stderr)
-        return
+    if transfer_run_dir:
+        try:
+            scp_client.get(
+                f"{machine_directory}",
+                f"{output_dir_path}/{run_directory}",
+                recursive=True,
+            )
+            _log.debug(f"{machine_name}: Transferred output directory")
+        except scp.SCPException as err:
+            _log.error(
+                f"{machine_name}: Could not transfer output directory back to host: {err}",
+            )
+            write_stdout_stderr(output_dir_path, stdout, stderr)
+            return False
 
-    # write output.json
+    # write final output files
     write_output_json(output_dir_path, start_time, end_time, total_time)
+    write_stdout_stderr(output_dir_path, stdout, stderr)
+
+    return True

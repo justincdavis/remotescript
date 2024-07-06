@@ -14,14 +14,14 @@ _log = logging.getLogger(__name__)
 
 
 def parse_arguments() -> (
-    tuple[Path, Path, Path, list[Path], Path | None, list[Path], int]
+    tuple[Path, Path, Path, list[Path], Path | None, list[Path], list[Path], int]
 ):
     """
     Parse the arguments and validate data.
 
     Returns
     -------
-    tuple[Path, Path, Path, list[Path], Path | None, list[Path], int]
+    tuple[Path, Path, Path, list[Path], Path | None, list[Path], list[Path], int]
         The parsed and validated arguments.
 
     Raises
@@ -52,19 +52,24 @@ def parse_arguments() -> (
         type=str,
     )
     parser.add_argument(
+        "--requirements",
+        type=str,
+        help="Required dependencies in the form of a requirements.txt file.",
+    )
+    parser.add_argument(
         "--datafiles",
         nargs="+",
         help="Any data files needed.",
     )
     parser.add_argument(
-        "--deps",
-        type=str,
-        help="Required dependencies in the form of a requirements.txt file.",
-    )
-    parser.add_argument(
         "--dep_scripts",
         nargs="+",
         help="Any dependency scripts needed.",
+    )
+    parser.add_argument(
+        "--dep_dirs",
+        nargs="+",
+        help="Any dependency directories needed.",
     )
     parser.add_argument(
         "--timeout",
@@ -78,8 +83,9 @@ def parse_arguments() -> (
     config_file_str: str = args.config
     output_dir_str: str = args.output or f"output_{int(time.time())}"
     datafiles: list[str] = args.datafiles or []
-    requirements_file: str | None = args.deps
+    requirements_file: str | None = args.requirements
     deps_scripts: list[str] = args.dep_scripts or []
+    dep_dirs: list[str] = args.dep_dirs or []
     timeout: int = args.timeout
 
     input_file = Path(input_file_str)
@@ -134,6 +140,17 @@ def parse_arguments() -> (
             raise ValueError(err_msg)
         dep_script_paths.append(dep_script_path)
 
+    dep_dir_paths: list[Path] = []
+    for dep_dir in dep_dirs:
+        dep_dir_path = Path(dep_dir)
+        if not dep_dir_path.exists():
+            err_msg = f"Dependency directory does not exist: {dep_dir_path}"
+            raise FileNotFoundError(err_msg)
+        if not dep_dir_path.is_dir():
+            err_msg = f"Dependency directory must be a directory: {dep_dir_path}"
+            raise ValueError(err_msg)
+        dep_dir_paths.append(dep_dir_path)
+
     return (
         input_file,
         config_file,
@@ -141,6 +158,7 @@ def parse_arguments() -> (
         datafile_paths,
         requirements_retval,
         dep_script_paths,
+        dep_dir_paths,
         timeout,
     )
 
