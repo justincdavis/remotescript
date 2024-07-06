@@ -93,10 +93,10 @@ from . import _core, _imports, _utils
 from ._core import check_bash, run_script
 
 __all__ = [
-    "check_bash",
-    "run_script",
-    "set_log_level",
     "_core",
     "_imports",
     "_utils",
+    "check_bash",
+    "run_script",
+    "set_log_level",
 ]

@@ -332,11 +332,11 @@ def run_script(
 
         # evaluate the output of the virtualenv installation
         for line in env_stderr_text.split("\n"):
-            line = line.strip()
-            if not line:
+            line2 = line.strip()
+            if not line2:
                 continue
             # stderr contains text that is not upgrade notice
-            if "[notice]" not in line:
+            if "[notice]" not in line2:
                 _log.error(
                     f"{machine_name}: Error installing the dependencies",
                 )
