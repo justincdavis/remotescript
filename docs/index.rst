@@ -1,5 +1,5 @@
 Welcome to remoterunner's Documentation
-===================================
+=======================================
 
 **remoterunner** allows Python scripts to be easily run on remote machines.
 
