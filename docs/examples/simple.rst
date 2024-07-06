@@ -9,6 +9,7 @@ Example: simple.py
 	#
 	# MIT License
 	"""Basic example showcasing hardware information and NumPy version."""
+	
 	from __future__ import annotations
 	
 	import platform
