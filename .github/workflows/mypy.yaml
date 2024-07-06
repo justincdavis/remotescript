@@ -19,4 +19,4 @@ jobs:
 
       - name: Run MyPy check
         run: 
-          python3 -m mypy src/remoterunner --config-file=pyproject.toml
+          python3 -m mypy src/remotescript --config-file=pyproject.toml

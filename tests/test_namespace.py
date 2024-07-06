@@ -1,9 +1,9 @@
 # Copyright (c) 2024 Justin Davis (davisjustin302@gmail.com)
 #
 # MIT License
-import remoterunner
+import remotescript
 
 
 def test_namespace():
-    assert remoterunner.check_bash is not None
-    assert remoterunner.run_script is not None
+    assert remotescript.check_bash is not None
+    assert remotescript.run_script is not None

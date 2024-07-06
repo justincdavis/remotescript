@@ -9,7 +9,7 @@ from pathlib import Path
 
 import paramiko
 
-from remoterunner._utils import parse_config
+from remotescript._utils import parse_config
 
 
 def main() -> None:

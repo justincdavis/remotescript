@@ -1,7 +1,7 @@
-Welcome to remoterunner's Documentation
+Welcome to remotescript's Documentation
 =======================================
 
-**remoterunner** allows Python scripts to be easily run on remote machines.
+**remotescript** allows Python scripts to be easily run on remote machines.
 
 Check out the :doc:`usage` section for further information, including
 how to :ref:`installation` the project.

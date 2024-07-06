@@ -18,16 +18,16 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join("..", "src")))
-import remoterunner
+import remotescript
 
 # -- Project information -----------------------------------------------------
 
-project = "remoterunner"
+project = "remotescript"
 copyright = "2023, Justin Davis"
 author = "Justin Davis"
 version = "0.0.1"
 
-assert version == remoterunner.__version__  # Make sure version is consistent
+assert version == remotescript.__version__  # Make sure version is consistent
 
 # -- General configuration ---------------------------------------------------
 # -- General configuration

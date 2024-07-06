@@ -1,9 +1,9 @@
-remoterunner
+remotescript
 ============
 
 .. toctree::
     :maxdepth: 2
 
-    source/remoterunner
+    source/remotescript
     source/modules.rst
     

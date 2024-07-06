@@ -12,7 +12,7 @@ check_bash
 run_script
     Run a script on a remote machine.
 set_log_level
-    Set the log level for the remoterunner package.
+    Set the log level for the remotescript package.
 
 """
 
@@ -55,7 +55,7 @@ def _setup_logger(level: str | None = None) -> None:
 
 def set_log_level(level: str) -> None:
     """
-    Set the log level for the remoterunner package.
+    Set the log level for the remotescript package.
 
     Parameters
     ----------
@@ -74,7 +74,7 @@ def set_log_level(level: str) -> None:
     _setup_logger(level)
 
 
-level = os.getenv("REMOTERUNNER_LOG_LEVEL")
+level = os.getenv("REMOTESCRIPT_LOG_LEVEL")
 _setup_logger(level)
 _log = logging.getLogger(__name__)
 if level is not None and level.upper() not in [

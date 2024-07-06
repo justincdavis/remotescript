@@ -3,7 +3,7 @@
 Usage
 ------------
 
-Using remoterunner is straightforward. Once you have the compiled TensorRT engine,
+Using remotescript is straightforward. Once you have the compiled TensorRT engine,
 you can simply import TRTEngine and begin your benchmarking process.
 If you need to handle the outputs of the model, then you can use TRTModel
 where you specify the pre and post-processing stages of the model.
@@ -14,7 +14,7 @@ TRTEngine
    .. code-block:: python
 
         import numpy as np
-        from remoterunner import TRTEngine
+        from remotescript import TRTEngine
 
         engine = TRTEngine("engine.engine", warmup=True, dtype=np.float32)
 
@@ -34,7 +34,7 @@ TRTModel
         import cv2
         import numpy as np
 
-        from remoterunner import TRTModel
+        from remotescript import TRTModel
 
         def preprocess(inputs: list[np.ndarray]) -> list[np.ndarray]:
             def _process(img: np.ndarray) -> np.ndarray:

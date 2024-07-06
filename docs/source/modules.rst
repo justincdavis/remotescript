@@ -1,7 +1,7 @@
-remoterunner
+remotescript
 ============
 
 .. toctree::
    :maxdepth: 4
 
-   remoterunner
+   remotescript

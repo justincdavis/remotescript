@@ -21,8 +21,8 @@ clean:
 	rm -rf build
 	rm -rf dist
 	rm -rf *.egg-info
-	rm -rf remoterunner/*.egg-info
-	rm -rf src/remoterunner/*.egg-info
+	rm -rf remotescript/*.egg-info
+	rm -rf src/remotescript/*.egg-info
 	pyclean .
 	rm -rf .mypy_cache
 	rm -rf .ruff_cache
@@ -30,7 +30,7 @@ clean:
 docs:
 	python3 ci/build_example_docs.py
 	rm -rf docs/source/*
-	sphinx-apidoc -o docs/source/ src/remoterunner/
+	sphinx-apidoc -o docs/source/ src/remotescript/
 	cd docs && make html
 
 blobs:
@@ -39,14 +39,14 @@ blobs:
 ci: ruff mypy
 
 mypy:
-	python3 -m mypy src/remoterunner --config-file=pyproject.toml
+	python3 -m mypy src/remotescript --config-file=pyproject.toml
 
 pyright:
 	python3 -m pyright --project=pyproject.toml
 
 ruff:
-	python3 -m ruff format ./src/remoterunner
-	python3 -m ruff check ./src/remoterunner --fix --preview
+	python3 -m ruff format ./src/remotescript
+	python3 -m ruff check ./src/remotescript --fix --preview
 
 stubs:
 	python3 ci/make_stubs.py

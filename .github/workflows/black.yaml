@@ -17,4 +17,4 @@
 #         run: pip install black
 
 #       - name: Run black check
-#         run: black --check src/remoterunner
+#         run: black --check src/remotescript

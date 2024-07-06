@@ -1,1 +1,1 @@
-include src/remoterunner/py.typed
+include src/remotescript/py.typed

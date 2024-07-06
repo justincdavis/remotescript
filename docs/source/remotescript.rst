@@ -1,10 +1,10 @@
-remoterunner package
+remotescript package
 ====================
 
 Module contents
 ---------------
 
-.. automodule:: remoterunner
+.. automodule:: remotescript
    :members:
    :undoc-members:
    :show-inheritance:

@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "remoterunner"
+name = "remotescript"
 version = "0.0.1"
 authors = [
   {name="Justin Davis", email="davisjustin302@gmail.com"},
@@ -41,8 +41,8 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/justincdavis/remoterunner"
-"Bug Tracker" = "https://github.com/justincdavis/remoterunner/issues"
+"Homepage" = "https://github.com/justincdavis/remotescript"
+"Bug Tracker" = "https://github.com/justincdavis/remotescript/issues"
 
 [project.optional-dependencies]
 ci = [
@@ -60,9 +60,9 @@ docs = [
     "myst_parser>=1.0.0",
 ]
 dev = [
-    "remoterunner[ci]",
-    "remoterunner[test]",
-    "remoterunner[docs]",
+    "remotescript[ci]",
+    "remotescript[test]",
+    "remotescript[docs]",
     "twine>=4.0.0",
     "wheel>=0.37.0",
     "bumpver>=2023.1126",
@@ -80,14 +80,14 @@ push            = false
 
 [tool.bumpver.file_patterns]
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
-"src/remoterunner/__init__.py" = ["{version}"]
+"src/remotescript/__init__.py" = ["{version}"]
 "docs/conf.py" = ["{version}"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-remoterunner = ["src/remoterunner/py.typed"]
+remotescript = ["src/remotescript/py.typed"]
 
 [tool.ruff]
 fix = true
