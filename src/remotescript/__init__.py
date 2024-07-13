@@ -87,7 +87,7 @@ if level is not None and level.upper() not in [
     _log.warning(f"Invalid log level: {level}. Using default log level: WARNING")
 
 __author__ = "Justin Davis"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 from . import _core, _imports, _utils
 from ._core import check_bash, run_script
