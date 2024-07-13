@@ -135,12 +135,18 @@ def run_script(
 
     """
 
-    def write_stdout_stderr(output_dir: Path, stdout: str, stderr: str) -> None:
+    def write_stdout_stderr(
+        output_dir: Path,
+        stdout: str,
+        stderr: str,
+        stdout_name: str = "setup_stdout.txt",
+        stderr_name: str = "setup_stderr.txt",
+    ) -> None:
         """Write the stdout and stderr to files before exit."""
         _log.debug(f"{machine_name}: Exiting")
         # write stdout, stderr to files
-        stdout_path = output_dir / "stdout.txt"
-        stderr_path = output_dir / "stderr.txt"
+        stdout_path = output_dir / stdout_name
+        stderr_path = output_dir / stderr_name
         stdout_path.touch(exist_ok=True)
         stderr_path.touch(exist_ok=True)
         stdout_path.write_text(stdout)
@@ -357,9 +363,9 @@ def run_script(
         command += "source env/bin/activate;"
         command += "python3 script.py;"
         command += "deactivate"
-        _, script_stdout, script_stderr = client.exec_command(com_wrap(command))
-        stdout += script_stdout.read().decode()
-        stderr += script_stderr.read().decode()
+        _, command_stdout, command_stderr = client.exec_command(com_wrap(command))
+        script_stdout = command_stdout.read().decode()
+        script_stderr = command_stderr.read().decode()
 
         # end time
         end_time = int(time.time())
@@ -392,10 +398,24 @@ def run_script(
                 f"{machine_name}: Could not transfer output directory back to host: {err}",
             )
             write_stdout_stderr(output_dir_path, stdout, stderr)
+            write_stdout_stderr(
+                output_dir_path,
+                script_stdout,
+                script_stderr,
+                "stdout.txt",
+                "stderr.txt",
+            )
             return False
 
     # write final output files
     write_output_json(output_dir_path, start_time, end_time, total_time)
     write_stdout_stderr(output_dir_path, stdout, stderr)
+    write_stdout_stderr(
+        output_dir_path,
+        script_stdout,
+        script_stderr,
+        "stdout.txt",
+        "stderr.txt",
+    )
 
     return True
