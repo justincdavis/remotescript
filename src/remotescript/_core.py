@@ -164,7 +164,7 @@ def wrap_command(bash: str, command: str) -> str:
     return f"{bash} -c '{command}'"
 
 
-def heartbeat(client: paramiko.SSHClient, interval: float = 60.0) -> None:
+def heartbeat(client: paramiko.SSHClient, interval: float = 30.0) -> None:
     """
     Send a heartbeat to the remote client to keep alive.
     
@@ -176,6 +176,7 @@ def heartbeat(client: paramiko.SSHClient, interval: float = 60.0) -> None:
         The event to stop the heartbeat.
     interval : float
         The interval to send the heartbeat.
+        By default, this is 30.0 seconds.
     
     Returns
     -------
@@ -187,9 +188,12 @@ def heartbeat(client: paramiko.SSHClient, interval: float = 60.0) -> None:
     """
     def _thread_target(client: paramiko.SSHClient, event: threading.Event, interval: float) -> None:
         transport = client.get_transport()
+        tag = time.time()
         while not event.is_set():
-            transport.send_ignore()
-            event.wait(interval)
+            if time.time() - tag > interval:
+                transport.send_ignore()
+                tag = time.time()
+            event.wait(1.0)
     
     event = threading.Event()
     thread = threading.Thread(target=_thread_target, args=(client, event, interval), daemon=True)
