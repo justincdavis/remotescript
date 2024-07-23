@@ -9,6 +9,7 @@ import json
 import logging
 import socket
 import time
+import threading
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -163,6 +164,56 @@ def wrap_command(bash: str, command: str) -> str:
     return f"{bash} -c '{command}'"
 
 
+def heartbeat(client: paramiko.SSHClient, interval: float = 60.0) -> None:
+    """
+    Send a heartbeat to the remote client to keep alive.
+    
+    Parameters
+    ----------
+    client : paramiko.SSHClient
+        The client to send the heartbeat to.
+    event : threading.Event
+        The event to stop the heartbeat.
+    interval : float
+        The interval to send the heartbeat.
+    
+    Returns
+    -------
+    threading.Thread
+        The thread running the heartbeat.
+    threading.Event
+        The event to stop the heartbeat
+        
+    """
+    def _thread_target(client: paramiko.SSHClient, event: threading.Event, interval: float) -> None:
+        transport = client.get_transport()
+        while not event.is_set():
+            transport.send_ignore()
+            event.wait(interval)
+    
+    event = threading.Event()
+    thread = threading.Thread(target=_thread_target, args=(client, event, interval), daemon=True)
+    thread.start()
+
+    return thread, event
+
+
+def close_heartbeat(thread: threading.Thread, event: threading.Event) -> None:
+    """
+    Close the heartbeat thread.
+    
+    Parameters
+    ----------
+    thread : threading.Thread
+        The thread to close.
+    event : threading.Event
+        The event to stop the heartbeat.
+    
+    """
+    event.set()
+    thread.join()
+
+
 def run_script(
     machine_name: str,
     hostname: str,
@@ -268,6 +319,9 @@ def run_script(
         return False
     _log.debug(f"{machine_name}: Connected")
 
+    # create the heartbeat
+    heartbeat_thread, heartbeat_event = heartbeat(client)
+
     # check for python3
     try:
         _, py3_stdout, py3_stderr = client.exec_command("python3 --version")
@@ -277,6 +331,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Python3 not found, exiting.")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
 
     # check for bash and create command wrapper
@@ -285,6 +340,7 @@ def run_script(
     if bash is None:
         _log.error(f"{machine_name}: Bash not found, exiting.")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
     _log.debug(f"{machine_name}: Bash found")
 
@@ -304,6 +360,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not create virtualenv directory")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
 
     # create the scp_client
@@ -313,6 +370,7 @@ def run_script(
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not create SCPClient: {err}")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
 
     # transfer the files
@@ -353,6 +411,7 @@ def run_script(
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not transfer files: {err}")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
 
     # ensure virtualenv is installed
@@ -369,6 +428,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install virtualenv")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
 
     # create the virtual environment
@@ -385,10 +445,12 @@ def run_script(
             if venv_create_stderr.read().decode():
                 _log.error(f"{machine_name}: Could not create virtualenv")
                 write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+                close_heartbeat(heartbeat_thread, heartbeat_event)
                 return False
         except paramiko.SSHException:
             _log.error(f"{machine_name}: Could not create virtualenv")
             write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+            close_heartbeat(heartbeat_thread, heartbeat_event)
             return False
 
     # install the dependencies
@@ -421,10 +483,12 @@ def run_script(
                     f"{machine_name}: Error installing the dependencies",
                 )
                 write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+                close_heartbeat(heartbeat_thread, heartbeat_event)
                 return False
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install dependencies")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
 
     # run the script
@@ -450,6 +514,7 @@ def run_script(
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not run script")
         write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+        close_heartbeat(heartbeat_thread, heartbeat_event)
         return False
 
     # clean the environment
@@ -482,6 +547,7 @@ def run_script(
                 "stdout.txt",
                 "stderr.txt",
             )
+            close_heartbeat(heartbeat_thread, heartbeat_event)
             return False
 
     # write final output files
@@ -495,5 +561,6 @@ def run_script(
         "stdout.txt",
         "stderr.txt",
     )
+    close_heartbeat(heartbeat_thread, heartbeat_event)
 
     return True
