@@ -79,6 +79,90 @@ def check_bash(client: paramiko.SSHClient) -> str | None:
     return None
 
 
+def write_stdout_stderr(
+    output_dir: Path,
+    stdout: str,
+    stderr: str,
+    machine_name: str,
+    stdout_name: str = "setup_stdout.txt",
+    stderr_name: str = "setup_stderr.txt",
+) -> None:
+    """
+    Write the stdout and stderr to files before exit.
+
+    Parameters
+    ----------
+    output_dir : Path
+        The output directory to write the files to.
+    stdout : str
+        The stdout text to write.
+    stderr : str
+        The stderr text to write.
+    machine_name : str
+        The name of the machine.
+    stdout_name : str
+        The name of the stdout file.
+    stderr_name : str
+        The name of the stderr file.
+
+    """
+    _log.debug(f"{machine_name}: Exiting")
+    # write stdout, stderr to files
+    stdout_path = output_dir / stdout_name
+    stderr_path = output_dir / stderr_name
+    stdout_path.touch(exist_ok=True)
+    stderr_path.touch(exist_ok=True)
+    stdout_path.write_text(stdout)
+    stderr_path.write_text(stderr)
+    _log.debug(f"{machine_name}: Wrote stdout, stderr to files")
+
+
+def write_output_json(output_dir: Path, st: int, et: int) -> None:
+    """
+    Write the output.json file.
+
+    Parameters
+    ----------
+    output_dir : Path
+        The output directory to write the file to.
+    st : int
+        The start time of the script.
+    et : int
+        The end time of the script.
+
+    """
+    total = et - st
+    output_json = {
+        "start_time": st,
+        "end_time": et,
+        "total_time": total,
+    }
+    output_json_path = output_dir / "output.json"
+    output_json_path.touch(exist_ok=True)
+    with output_json_path.open("w") as f:
+        json.dump(output_json, f, indent=4)
+
+
+def wrap_command(bash: str, command: str) -> str:
+    """
+    Wrap the command in the bash command.
+
+    Parameters
+    ----------
+    bash : str
+        The path to Bash on the remote machine.
+    command : str
+        The command to wrap.
+
+    Returns
+    -------
+    str
+        The wrapped command.
+
+    """
+    return f"{bash} -c '{command}'"
+
+
 def run_script(
     machine_name: str,
     hostname: str,
@@ -94,6 +178,8 @@ def run_script(
     timeout: int = 5,
     *,
     transfer_run_dir: bool | None = None,
+    use_system_site_packages: bool | None = None,
+    no_venv: bool | None = None,
 ) -> bool:
     """
     Run the script on the remote machine.
@@ -127,6 +213,18 @@ def run_script(
     transfer_run_dir : bool | None
         Whether to transfer the run directory back to the host.
         If None, the default is False.
+    use_system_site_packages : bool | None
+        Whether to use the system site packages.
+        If None, the default is False.
+        This is useful when specific packages are needed, which
+        may only be installed on the overall system.
+        For example, PyTorch with CUDA on Jetson devices.
+    no_venv : bool | None
+        Whether to use a virtual environment.
+        This can be useful when script has no dependencies.
+        If None, the default is False.
+        If there are dependencies, they will be installed to the system
+        site packages. Use caution when setting this to True.
 
     Returns
     -------
@@ -134,47 +232,16 @@ def run_script(
         True if the script ran successfully, False otherwise.
 
     """
-
-    def write_stdout_stderr(
-        output_dir: Path,
-        stdout: str,
-        stderr: str,
-        stdout_name: str = "setup_stdout.txt",
-        stderr_name: str = "setup_stderr.txt",
-    ) -> None:
-        """Write the stdout and stderr to files before exit."""
-        _log.debug(f"{machine_name}: Exiting")
-        # write stdout, stderr to files
-        stdout_path = output_dir / stdout_name
-        stderr_path = output_dir / stderr_name
-        stdout_path.touch(exist_ok=True)
-        stderr_path.touch(exist_ok=True)
-        stdout_path.write_text(stdout)
-        stderr_path.write_text(stderr)
-        _log.debug(f"{machine_name}: Wrote stdout, stderr to files")
-
-    def write_output_json(output_dir: Path, st: int, et: int, total: int) -> None:
-        """Write the output.json file."""
-        output_json = {
-            "start_time": st,
-            "end_time": et,
-            "total_time": total,
-        }
-        output_json_path = output_dir / "output.json"
-        output_json_path.touch(exist_ok=True)
-        with output_json_path.open("w") as f:
-            json.dump(output_json, f, indent=4)
-
-    def wrap_command(bash: str, command: str) -> str:
-        """Wrap the command in the bash command."""
-        return f"{bash} -c '{command}'"
-
     # begin run_script
     _log.debug(f"{machine_name}: Starting run_script")
 
     # handle and argument defaults
     if transfer_run_dir is None:
         transfer_run_dir = False
+    if use_system_site_packages is None:
+        use_system_site_packages = False
+    if no_venv is None:
+        no_venv = False
 
     # begin running logs for stdout and stderr of the script
     stdout = ""
@@ -193,11 +260,11 @@ def run_script(
         )
     except socket.timeout:
         _log.error(f"{machine_name}: Connection timed out, exiting.")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
     except OSError as er:
         _log.error(f"{machine_name}: Socket error: {er}")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
     _log.debug(f"{machine_name}: Connected")
 
@@ -209,7 +276,7 @@ def run_script(
         stderr += py3_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Python3 not found, exiting.")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
 
     # check for bash and create command wrapper
@@ -217,7 +284,7 @@ def run_script(
     com_wrap: Callable[[str], str] = partial(wrap_command, bash)
     if bash is None:
         _log.error(f"{machine_name}: Bash not found, exiting.")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
     _log.debug(f"{machine_name}: Bash found")
 
@@ -236,7 +303,7 @@ def run_script(
         stderr += mk_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not create virtualenv directory")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
 
     # create the scp_client
@@ -245,7 +312,7 @@ def run_script(
         _log.debug(f"{machine_name}: Created SCPClient")
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not create SCPClient: {err}")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
 
     # transfer the files
@@ -285,7 +352,7 @@ def run_script(
         _log.debug(f"{machine_name}: Transferred all files")
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not transfer files: {err}")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
 
     # ensure virtualenv is installed
@@ -301,33 +368,40 @@ def run_script(
         stderr += venv_install_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install virtualenv")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
 
     # create the virtual environment
-    try:
-        venv_create_com = f"python3 -m venv {machine_directory}/env"
-        _, venv_create_stdout, venv_create_stderr = client.exec_command(
-            com_wrap(venv_create_com),
-        )
-        stdout += venv_create_stdout.read().decode()
-        stderr += venv_create_stderr.read().decode()
-        if venv_create_stderr.read().decode():
+    if not no_venv:
+        try:
+            venv_create_com = f"python3 -m venv {machine_directory}/env"
+            if use_system_site_packages:
+                venv_create_com += " --system-site-packages"
+            _, venv_create_stdout, venv_create_stderr = client.exec_command(
+                com_wrap(venv_create_com),
+            )
+            stdout += venv_create_stdout.read().decode()
+            stderr += venv_create_stderr.read().decode()
+            if venv_create_stderr.read().decode():
+                _log.error(f"{machine_name}: Could not create virtualenv")
+                write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
+                return False
+        except paramiko.SSHException:
             _log.error(f"{machine_name}: Could not create virtualenv")
-            write_stdout_stderr(output_dir_path, stdout, stderr)
+            write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
             return False
-    except paramiko.SSHException:
-        _log.error(f"{machine_name}: Could not create virtualenv")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
-        return False
 
     # install the dependencies
     try:
-        install_dep_com = f"source {machine_directory}/env/bin/activate;"
-        install_dep_com += (
+        base_install_com = (
             f"python3 -m pip install -r {machine_directory}/requirements.txt;"
         )
-        install_dep_com += "deactivate"
+        install_dep_com = ""
+        if not no_venv:
+            install_dep_com += f"source {machine_directory}/env/bin/activate;"
+        install_dep_com += base_install_com
+        if not no_venv:
+            install_dep_com += "deactivate"
         _, install_dep_stdout, install_dep_stderr = client.exec_command(
             com_wrap(install_dep_com),
         )
@@ -346,11 +420,11 @@ def run_script(
                 _log.error(
                     f"{machine_name}: Error installing the dependencies",
                 )
-                write_stdout_stderr(output_dir_path, stdout, stderr)
+                write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
                 return False
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install dependencies")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
 
     # run the script
@@ -360,9 +434,11 @@ def run_script(
 
         # actual script run
         command = f"cd {machine_directory};"
-        command += "source env/bin/activate;"
+        if not no_venv:
+            command += "source env/bin/activate;"
         command += "python3 script.py;"
-        command += "deactivate"
+        if not no_venv:
+            command += "deactivate"
         _, command_stdout, command_stderr = client.exec_command(com_wrap(command))
         script_stdout = command_stdout.read().decode()
         script_stderr = command_stderr.read().decode()
@@ -373,7 +449,7 @@ def run_script(
         _log.debug(f"{machine_name}: Script ran in {total_time} seconds")
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not run script")
-        write_stdout_stderr(output_dir_path, stdout, stderr)
+        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
         return False
 
     # clean the environment
@@ -397,23 +473,25 @@ def run_script(
             _log.error(
                 f"{machine_name}: Could not transfer output directory back to host: {err}",
             )
-            write_stdout_stderr(output_dir_path, stdout, stderr)
+            write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
             write_stdout_stderr(
                 output_dir_path,
                 script_stdout,
                 script_stderr,
+                machine_name,
                 "stdout.txt",
                 "stderr.txt",
             )
             return False
 
     # write final output files
-    write_output_json(output_dir_path, start_time, end_time, total_time)
-    write_stdout_stderr(output_dir_path, stdout, stderr)
+    write_output_json(output_dir_path, start_time, end_time)
+    write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
     write_stdout_stderr(
         output_dir_path,
         script_stdout,
         script_stderr,
+        machine_name,
         "stdout.txt",
         "stderr.txt",
     )

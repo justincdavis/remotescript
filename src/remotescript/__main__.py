@@ -34,6 +34,8 @@ def main() -> None:
         dep_scripts,
         dep_dirs,
         timeout,
+        use_site_packages,
+        no_venv,
     ) = parse_arguments()
     config = parse_config(config_path)
 
@@ -88,6 +90,8 @@ def main() -> None:
                     dep_scripts,
                     dep_dirs,
                     timeout,
+                    use_site_packages,
+                    no_venv,
                 ),
                 daemon=True,
             ),
