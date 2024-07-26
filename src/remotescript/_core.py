@@ -308,6 +308,20 @@ def run_script(
         True if the script ran successfully, False otherwise.
 
     """
+
+    # helper function for early exits
+    def early_exit(
+        odp: Path,
+        out: str,
+        err: str,
+        mn: str,
+        hthread: threading.Thread,
+        hevent: threading.Event,
+    ) -> bool:
+        write_stdout_stderr(odp, out, err, mn)
+        close_heartbeat(hthread, hevent)
+        return False
+
     # begin run_script
     _log.debug(f"{machine_name}: Starting run_script")
 
@@ -361,18 +375,40 @@ def run_script(
         stderr += py3_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Python3 not found, exiting.")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
 
     # check for bash and create command wrapper
     bash = check_bash(client)
+    if bash is None:
+        err_msg = "Bash not found, exiting."
+        _log.error(f"{machine_name}: {err_msg}")
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
+
     com_wrap: Callable[[str], str] = partial(wrap_command, bash)
     if bash is None:
         _log.error(f"{machine_name}: Bash not found, exiting.")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
     _log.debug(f"{machine_name}: Bash found")
 
     # create new directory for which to run the script and create
@@ -390,9 +426,14 @@ def run_script(
         stderr += mk_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not create virtualenv directory")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
 
     # create the scp_client
     try:
@@ -400,9 +441,14 @@ def run_script(
         _log.debug(f"{machine_name}: Created SCPClient")
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not create SCPClient: {err}")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
 
     # transfer the files
     try:
@@ -441,9 +487,14 @@ def run_script(
         _log.debug(f"{machine_name}: Transferred all files")
     except scp.SCPException as err:
         _log.error(f"{machine_name}: Could not transfer files: {err}")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
 
     # ensure virtualenv is installed
     try:
@@ -458,9 +509,14 @@ def run_script(
         stderr += venv_install_stderr.read().decode()
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install virtualenv")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
 
     # create the virtual environment
     if not no_venv:
@@ -475,14 +531,24 @@ def run_script(
             stderr += venv_create_stderr.read().decode()
             if venv_create_stderr.read().decode():
                 _log.error(f"{machine_name}: Could not create virtualenv")
-                write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-                close_heartbeat(heartbeat_thread, heartbeat_event)
-                return False
+                return early_exit(
+                    output_dir_path,
+                    stdout,
+                    stderr,
+                    machine_name,
+                    heartbeat_thread,
+                    heartbeat_event,
+                )
         except paramiko.SSHException:
             _log.error(f"{machine_name}: Could not create virtualenv")
-            write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-            close_heartbeat(heartbeat_thread, heartbeat_event)
-            return False
+            return early_exit(
+                output_dir_path,
+                stdout,
+                stderr,
+                machine_name,
+                heartbeat_thread,
+                heartbeat_event,
+            )
 
     # install the dependencies
     try:
@@ -513,14 +579,24 @@ def run_script(
                 _log.error(
                     f"{machine_name}: Error installing the dependencies",
                 )
-                write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-                close_heartbeat(heartbeat_thread, heartbeat_event)
-                return False
+                return early_exit(
+                    output_dir_path,
+                    stdout,
+                    stderr,
+                    machine_name,
+                    heartbeat_thread,
+                    heartbeat_event,
+                )
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not install dependencies")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
 
     # run the script
     try:
@@ -544,9 +620,14 @@ def run_script(
         _log.debug(f"{machine_name}: Script ran in {total_time} seconds")
     except paramiko.SSHException:
         _log.error(f"{machine_name}: Could not run script")
-        write_stdout_stderr(output_dir_path, stdout, stderr, machine_name)
-        close_heartbeat(heartbeat_thread, heartbeat_event)
-        return False
+        return early_exit(
+            output_dir_path,
+            stdout,
+            stderr,
+            machine_name,
+            heartbeat_thread,
+            heartbeat_event,
+        )
 
     # clean the environment
     try:
