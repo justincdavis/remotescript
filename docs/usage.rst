@@ -18,6 +18,7 @@ Here is an example in action:
     information from the system and prints it out:
 
     .. code-block:: python
+
         import platform
         from platform import system_alias
 
@@ -40,6 +41,7 @@ Here is an example in action:
     information on 2 different machines:
 
     .. code-block:: ini
+
         [machine1]
         host = 192.168.1.33
         user = user1
@@ -57,6 +59,7 @@ Here is an example in action:
 3.  Run the script using remotescript:
 
     .. code-block:: Bash
+
         $ python3 -m remotescript --script info.py --requirements requirements.txt --config config.cfg --output /output
 
 4.  The output is saved in the directory specified by the ``--output`` flag.

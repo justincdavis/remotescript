@@ -8,8 +8,8 @@ import contextlib
 import json
 import logging
 import socket
-import time
 import threading
+import time
 from functools import partial
 from typing import TYPE_CHECKING
 
@@ -164,10 +164,13 @@ def wrap_command(bash: str, command: str) -> str:
     return f"{bash} -c '{command}'"
 
 
-def heartbeat(client: paramiko.SSHClient, interval: float = 30.0) -> None:
+def heartbeat(
+    client: paramiko.SSHClient,
+    interval: float = 30.0,
+) -> tuple[threading.Thread, threading.Event]:
     """
     Send a heartbeat to the remote client to keep alive.
-    
+
     Parameters
     ----------
     client : paramiko.SSHClient
@@ -177,26 +180,44 @@ def heartbeat(client: paramiko.SSHClient, interval: float = 30.0) -> None:
     interval : float
         The interval to send the heartbeat.
         By default, this is 30.0 seconds.
-    
+
     Returns
     -------
     threading.Thread
         The thread running the heartbeat.
     threading.Event
         The event to stop the heartbeat
-        
+
+    Raises
+    ------
+    ValueError
+        If the transport is None.
+
     """
-    def _thread_target(client: paramiko.SSHClient, event: threading.Event, interval: float) -> None:
+
+    def _thread_target(
+        client: paramiko.SSHClient,
+        event: threading.Event,
+        interval: float,
+    ) -> None:
         transport = client.get_transport()
+        if transport is None:
+            err_msg = "Transport is None, exiting heartbeat"
+            _log.error(err_msg)
+            raise ValueError(err_msg)
         tag = time.time()
         while not event.is_set():
             if time.time() - tag > interval:
                 transport.send_ignore()
                 tag = time.time()
             event.wait(1.0)
-    
+
     event = threading.Event()
-    thread = threading.Thread(target=_thread_target, args=(client, event, interval), daemon=True)
+    thread = threading.Thread(
+        target=_thread_target,
+        args=(client, event, interval),
+        daemon=True,
+    )
     thread.start()
 
     return thread, event
@@ -205,14 +226,14 @@ def heartbeat(client: paramiko.SSHClient, interval: float = 30.0) -> None:
 def close_heartbeat(thread: threading.Thread, event: threading.Event) -> None:
     """
     Close the heartbeat thread.
-    
+
     Parameters
     ----------
     thread : threading.Thread
         The thread to close.
     event : threading.Event
         The event to stop the heartbeat.
-    
+
     """
     event.set()
     thread.join()
@@ -324,7 +345,13 @@ def run_script(
     _log.debug(f"{machine_name}: Connected")
 
     # create the heartbeat
-    heartbeat_thread, heartbeat_event = heartbeat(client)
+    try:
+        heartbeat_thread, heartbeat_event = heartbeat(client)
+    except ValueError:
+        err_msg = (
+            "Could not create heartbeat connection. Long running commands may timeout."
+        )
+        _log.error(f"{machine_name}: {err_msg}")
 
     # check for python3
     try:
