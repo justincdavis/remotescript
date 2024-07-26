@@ -25,7 +25,7 @@ import remotescript
 project = "remotescript"
 copyright = "2023, Justin Davis"
 author = "Justin Davis"
-version = "0.0.2"
+version = "0.0.3"
 
 assert version == remotescript.__version__  # Make sure version is consistent
 
