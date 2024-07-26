@@ -7,6 +7,11 @@ name = "remotescript"
 version = "0.0.2"
 authors = [
   {name="Justin Davis", email="davisjustin302@gmail.com"},
+  {name="Ben Guevel"},
+  {name="Caleb Pham"},
+  {name="Edward Gibson"},
+  {name="Caden Ford"},
+  {name="Andrew Depke"},
 ]
 maintainers = [
   {name="Justin Davis", email="davisjustin302@gmail.com"},
@@ -28,7 +33,6 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Topic :: Software Development",
     "Intended Audience :: Developers",
-    "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
     "Intended Audience :: Education",
     "Typing :: Typed",

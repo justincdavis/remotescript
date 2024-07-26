@@ -14,14 +14,25 @@ _log = logging.getLogger(__name__)
 
 
 def parse_arguments() -> (
-    tuple[Path, Path, Path, list[Path], Path | None, list[Path], list[Path], int]
+    tuple[
+        Path,
+        Path,
+        Path,
+        list[Path],
+        Path | None,
+        list[Path],
+        list[Path],
+        int,
+        bool,
+        bool,
+    ]
 ):
     """
     Parse the arguments and validate data.
 
     Returns
     -------
-    tuple[Path, Path, Path, list[Path], Path | None, list[Path], list[Path], int]
+    tuple[Path, Path, Path, list[Path], Path | None, list[Path], list[Path], int, bool, bool]
         The parsed and validated arguments.
 
     Raises
@@ -77,6 +88,16 @@ def parse_arguments() -> (
         default=5,
         help="The timeout for the connection to the remote machine.",
     )
+    parser.add_argument(
+        "--system-site-packages",
+        action="store_true",
+        help="Use the system site packages.",
+    )
+    parser.add_argument(
+        "--no-venv",
+        action="store_true",
+        help="Do not use a virtual environment.",
+    )
 
     args = parser.parse_args()
     input_file_str: str = args.script
@@ -87,6 +108,8 @@ def parse_arguments() -> (
     deps_scripts: list[str] = args.dep_scripts or []
     dep_dirs: list[str] = args.dep_dirs or []
     timeout: int = args.timeout
+    use_site_packages: bool = args.system_site_packages
+    no_venv: bool = args.no_venv
 
     input_file = Path(input_file_str)
     if not input_file.exists():
@@ -160,6 +183,8 @@ def parse_arguments() -> (
         dep_script_paths,
         dep_dir_paths,
         timeout,
+        use_site_packages,
+        no_venv,
     )
 
 
