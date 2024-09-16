@@ -16,6 +16,7 @@ authors = [
 maintainers = [
   {name="Justin Davis", email="davisjustin302@gmail.com"},
 ]
+description = "Package for executing Python scripts on remote machines"
 readme = "README.md"
 classifiers = [
     "Development Status :: 4 - Beta",
